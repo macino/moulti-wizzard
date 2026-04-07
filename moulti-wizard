@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+# moulti-wizard — interactive Moulti wizard for Ansible playbooks
+#
+# Discovers scenarios from a site.yml playbook (play name → button label,
+# first tag → scenario ID), presents a buttonquestion, then runs
+# ansible-playbook with the chosen tag.
+#
+# Usage:
+#   moulti-wizard [--playbook <path>] [--title <string>] [--collapse-tasks]
+
+set -euo pipefail
+
+# ── Defaults ────────────────────────────────────────────────────────────────
+PLAYBOOK="site.yml"
+WIZARD_TITLE="Moulti Ansible Wizard"
+COLLAPSE_TASKS=0
+
+# ── Argument parsing ─────────────────────────────────────────────────────────
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --playbook)  PLAYBOOK="$2";      shift 2 ;;
+        --title)     WIZARD_TITLE="$2";  shift 2 ;;
+        --collapse-tasks) COLLAPSE_TASKS=1; shift ;;
+        -h|--help)
+            cat <<EOF
+Usage: moulti-wizard [OPTIONS]
+
+Options:
+  --playbook <path>    Path to the Ansible playbook (default: site.yml)
+  --title <string>     Title shown in Moulti header (default: "Moulti Ansible Wizard")
+  --collapse-tasks     Collapse passing Ansible tasks automatically
+  -h, --help           Show this help
+
+Convention in site.yml:
+  Each play that should appear as a wizard button needs:
+    - a non-empty "name:" field  → used as the button label
+    - at least one entry in "tags:"  → first tag used as scenario ID
+
+Example play:
+  - name: "After Development Checks"
+    tags: [ADC]
+    hosts: localhost
+    tasks: ...
+EOF
+            exit 0
+            ;;
+        *) echo "Unknown option: $1" >&2; exit 1 ;;
+    esac
+done
+
+# ── Bootstrap: start Moulti if not already running ───────────────────────────
+export MOULTI_INSTANCE="${MOULTI_INSTANCE:-moulti-wizard}"
+[[ "${MOULTI_RUN:-}" ]] || exec moulti run -- "$0" \
+    --playbook "$PLAYBOOK" \
+    --title "$WIZARD_TITLE" \
+    ${COLLAPSE_TASKS:+--collapse-tasks} \
+    "$@"
+
+# ── From here we are inside a running Moulti instance ────────────────────────
+
+[[ $COLLAPSE_TASKS -eq 1 ]] && export MOULTI_ANSIBLE_COLLAPSE=task
+
+moulti set --title "$WIZARD_TITLE"
+
+# ── Resolve playbook path ─────────────────────────────────────────────────────
+if [[ ! -f "$PLAYBOOK" ]]; then
+    echo "Error: playbook not found: $PLAYBOOK" >&2
+    exit 1
+fi
+
+# ── Resolve Python interpreter ───────────────────────────────────────────────
+# Prefer the same python that ansible uses (guarantees pyyaml is available).
+_ansible_bin="$(command -v ansible-playbook 2>/dev/null || true)"
+if [[ -x "$_ansible_bin" ]]; then
+    _shebang_python="$(head -1 "$_ansible_bin" | sed 's/^#![[:space:]]*//' | awk '{print $1}')"
+    [[ -x "${_shebang_python:-}" ]] && PYTHON_BIN="$_shebang_python"
+fi
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+
+# ── Parse playbook: extract (name, first_tag) pairs ──────────────────────────
+# Output format: one line per play: "<tag>\t<name>"
+# Plays without both name and tags are skipped.
+parse_plays() {
+    "$PYTHON_BIN" - "$1" <<'PYEOF'
+import sys, yaml
+
+with open(sys.argv[1]) as f:
+    plays = yaml.safe_load(f)
+
+if not isinstance(plays, list):
+    sys.exit("Error: playbook must be a YAML list of plays")
+
+for play in plays:
+    if not isinstance(play, dict):
+        continue
+    name = play.get('name', '').strip()
+    tags = play.get('tags', [])
+    if isinstance(tags, str):
+        tags = [tags]
+    if name and tags:
+        print(f"{tags[0]}\t{name}")
+PYEOF
+}
+
+# ── Main loop ─────────────────────────────────────────────────────────────────
+while true; do
+    R=$RANDOM
+    ROUTER="wizard-router-${R}"
+
+    # Build --button arguments dynamically
+    BUTTON_ARGS=()
+    declare -A TAG_TO_NAME
+
+    while IFS=$'\t' read -r tag name; do
+        BUTTON_ARGS+=(--button "$tag" default "$name")
+        TAG_TO_NAME["$tag"]="$name"
+    done < <(parse_plays "$PLAYBOOK")
+
+    if [[ ${#BUTTON_ARGS[@]} -eq 0 ]]; then
+        echo "Error: no playable scenarios found in $PLAYBOOK" \
+             "(plays need both 'name:' and 'tags:')" >&2
+        exit 1
+    fi
+
+    BUTTON_ARGS+=(--button "exit" error "<exit>")
+
+    moulti buttonquestion add "$ROUTER" \
+        --title="Choose scenario" \
+        "${BUTTON_ARGS[@]}"
+
+    SCENARIO="$(moulti buttonquestion get-answer "$ROUTER" --wait)"
+
+    if [[ "$SCENARIO" == "exit" ]]; then
+        exit 0
+    fi
+
+    SCENARIO_NAME="${TAG_TO_NAME[$SCENARIO]:-$SCENARIO}"
+    DIVIDER="divider-${R}"
+    moulti divider add "$DIVIDER" \
+        --classes=warning \
+        --title="Scenario: [i]${SCENARIO_NAME}[/]"
+
+    # Run the selected play; MOULTI_ANSIBLE=force ensures moulti callback is active
+    # even when the wizard script name doesn't contain "ansible"
+    MOULTI_ANSIBLE=force ansible-playbook "$PLAYBOOK" --tags "$SCENARIO" || true
+
+    unset TAG_TO_NAME
+done

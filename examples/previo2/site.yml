@@ -1,0 +1,87 @@
+---
+# Previo II — Moulti Wizard example playbook
+#
+# Run with:   moulti-wizard
+# (assuming moulti-wizard is on your PATH and you are in this directory)
+
+- name: "After Development Checks"
+  tags: [ADC]
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    composer: docker compose exec php composer run
+    docker_php: docker compose exec php
+  tasks:
+    - name: ECS check & fix
+      ansible.builtin.command: "{{ docker_php }} ./bin/ecs check --fix"
+
+    - name: JS lint fix
+      ansible.builtin.command: "{{ docker_php }} yarn lint:js-fix"
+
+    - name: PHPStan analyse
+      ansible.builtin.command: "{{ docker_php }} ./bin/phpstan analyse --memory-limit=-1"
+
+    - name: Run all checks
+      ansible.builtin.command: "{{ composer }} p2:check-all"
+
+- name: "After Update"
+  tags: [AU]
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    composer: docker compose exec php composer run
+    docker_php: docker compose exec php
+  tasks:
+    - name: Clear BE cache
+      ansible.builtin.command: "{{ composer }} p2:clear-cache"
+
+    - name: Generate env
+      ansible.builtin.command: "{{ composer }} p2:env-generate"
+
+    - name: Clean FE cache
+      ansible.builtin.command: "{{ docker_php }} yarn cache clean"
+
+    - name: Apply DB migrations
+      ansible.builtin.command: "{{ composer }} p2:db-apply-migrations"
+
+    - name: Install JS dependencies
+      ansible.builtin.command: "{{ docker_php }} yarn install"
+
+- name: "Cache Clean"
+  tags: [CACHE]
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    composer: docker compose exec php composer run
+    docker_php: docker compose exec php
+  tasks:
+    - name: Clear BE cache
+      ansible.builtin.command: "{{ composer }} p2:clear-cache"
+
+    - name: Clean FE cache
+      ansible.builtin.command: "{{ docker_php }} yarn cache clean"
+
+- name: "Env Generate"
+  tags: [EG]
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    composer: docker compose exec php composer run
+  tasks:
+    - name: Generate env
+      ansible.builtin.command: "{{ composer }} p2:env-generate"
+
+- name: "PMS FE Tests"
+  tags: [FET]
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    docker_php: docker compose exec php
+  tasks:
+    - name: Run PMS FE tests
+      ansible.builtin.command: "{{ docker_php }} yarn test:previo-pms"
