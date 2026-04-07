@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # moulti-wizard — interactive Moulti wizard for Ansible playbooks
 #
-# Discovers scenarios from a site.yml playbook (play name → button label,
-# first tag → scenario ID), presents a buttonquestion, then runs
+# Discovers scenarios from an Ansible playbook (play name → button label,
+# first tag → scenario ID), presents a button question, then runs
 # ansible-playbook with the chosen tag.
+#
+# Default playbook: site.yaml (falls back to site.yml for backwards compatibility)
+# Custom playbooks can be specified with --playbook <path>
 #
 # Usage:
 #   moulti-wizard [--playbook <path>] [--title <string>] [--collapse-tasks]
@@ -11,7 +14,7 @@
 set -euo pipefail
 
 # ── Defaults ────────────────────────────────────────────────────────────────
-PLAYBOOK="site.yml"
+PLAYBOOK=""
 WIZARD_TITLE="Moulti Ansible Wizard"
 COLLAPSE_TASKS=0
 
@@ -26,12 +29,17 @@ while [[ $# -gt 0 ]]; do
 Usage: moulti-wizard [OPTIONS]
 
 Options:
-  --playbook <path>    Path to the Ansible playbook (default: site.yml)
+  --playbook <path>    Path to the Ansible playbook (default: site.yaml, falls back to site.yml)
   --title <string>     Title shown in Moulti header (default: "Moulti Ansible Wizard")
   --collapse-tasks     Collapse passing Ansible tasks automatically
   -h, --help           Show this help
 
-Convention in site.yml:
+Default playbook resolution:
+  1. If --playbook is specified, use that path
+  2. Otherwise, look for site.yaml in the current directory
+  3. If not found, try site.yml (backwards compatibility)
+
+Convention in playbook files:
   Each play that should appear as a wizard button needs:
     - a non-empty "name:" field  → used as the button label
     - at least one entry in "tags:"  → first tag used as scenario ID
@@ -63,6 +71,19 @@ export MOULTI_INSTANCE="${MOULTI_INSTANCE:-moulti-wizard}"
 moulti set --title "$WIZARD_TITLE"
 
 # ── Resolve playbook path ─────────────────────────────────────────────────────
+if [[ -z "$PLAYBOOK" ]]; then
+    # Try default locations
+    if [[ -f "site.yaml" ]]; then
+        PLAYBOOK="site.yaml"
+    elif [[ -f "site.yml" ]]; then
+        PLAYBOOK="site.yml"
+    else
+        echo "Error: no playbook found. Tried site.yaml and site.yml in current directory." >&2
+        echo "You can specify a custom playbook with: moulti-wizard --playbook <path>" >&2
+        exit 1
+    fi
+fi
+
 if [[ ! -f "$PLAYBOOK" ]]; then
     echo "Error: playbook not found: $PLAYBOOK" >&2
     exit 1
