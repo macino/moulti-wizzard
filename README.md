@@ -5,11 +5,11 @@ An interactive [Moulti](https://moulti.run/) wizard for Ansible playbooks.
 Automatically discovers scenarios from your `site.yml` playbook and presents them as clickable buttons. When a scenario is chosen, it runs `ansible-playbook` with the matching tag — and all Ansible task output appears as collapsible Moulti steps.
 
 ```
-+-----------------------------------------------------------+
-|                   Choose scenario                         |
++------------------------------------------------------------+
+|                    Choose scenario                         |
 |  [After Development Checks]  [After Update]  [Cache Clean] |
 |  ...  [<exit>]                                             |
-+-----------------------------------------------------------+
++------------------------------------------------------------+
 ▶ TASK: ECS check & fix
 ▶ TASK: JS lint fix
 ▶ TASK: PHPStan analyse
@@ -18,18 +18,46 @@ Automatically discovers scenarios from your `site.yml` playbook and presents the
 
 ## Installation
 
-Copy (or symlink) `moulti-wizard` to anywhere on your `$PATH`:
+### Quick install with Make
+
+```bash
+# Check dependencies first
+make check
+
+# Install (to ~/.local/bin by default)
+make install
+
+# Or install to a custom location
+make install PREFIX=/usr/local
+```
+
+### Manual installation
+
+Copy `moulti-wizard` to any directory on your `$PATH`:
 
 ```bash
 cp moulti-wizard ~/.local/bin/moulti-wizard
-# or
-ln -s "$PWD/moulti-wizard" ~/.local/bin/moulti-wizard
+chmod +x ~/.local/bin/moulti-wizard
 ```
 
-**Requirements:**
-- [`moulti`](https://moulti.run/install/) — `pipx install moulti`
-- `ansible-playbook` (ansible-core)
-- `python3` with `pyyaml` — `pip install pyyaml` (usually installed with Ansible)
+### Requirements
+
+Check if you have everything installed:
+
+```bash
+make check
+```
+
+Or install manually:
+- **[`moulti`](https://moulti.run/install/)** — `pipx install moulti`
+- **`ansible-core`** — `pipx install ansible-core` (or `pip install ansible`)
+- **`python3`** with `pyyaml` — comes with Ansible, or `pip install pyyaml`
+
+Make sure `~/.local/bin` is on your `$PATH`:
+
+```bash
+export PATH=$HOME/.local/bin:$PATH
+```
 
 ## Usage
 
