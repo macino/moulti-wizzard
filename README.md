@@ -5,10 +5,11 @@ An interactive [Moulti](https://moulti.run/) wizard for Ansible playbooks.
 Automatically discovers scenarios from your `site.yml` playbook and presents them as clickable buttons. When a scenario is chosen, it runs `ansible-playbook` with the matching tag — and all Ansible task output appears as collapsible Moulti steps.
 
 ```
-╔══════════════════════════════════╗
-║      Choose scenario             ║
-║  [After Dev Checks] [After Update]  [Cache Clean]  ...  [<exit>]  ║
-╚══════════════════════════════════╝
++-----------------------------------------------------------+
+|                   Choose scenario                         |
+|  [After Development Checks]  [After Update]  [Cache Clean] |
+|  ...  [<exit>]                                             |
++-----------------------------------------------------------+
 ▶ TASK: ECS check & fix
 ▶ TASK: JS lint fix
 ▶ TASK: PHPStan analyse
