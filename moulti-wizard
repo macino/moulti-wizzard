@@ -39,6 +39,11 @@ Default playbook resolution:
   2. Otherwise, look for site.yaml in the current directory
   3. If not found, try site.yml (backwards compatibility)
 
+Output Format:
+  When running in Moulti, each task creates its own section with full command output
+  visible in real-time, including stdout, stderr, and test results. Passing tasks
+  are auto-collapsed for cleaner UI; failed tasks show full details.
+
 Convention in playbook files:
   Each play that should appear as a wizard button needs:
     - a non-empty "name:" field  → used as the button label
@@ -163,7 +168,11 @@ while true; do
 
     # Run the selected play; MOULTI_ANSIBLE=force ensures moulti callback is active
     # even when the wizard script name doesn't contain "ansible"
-    MOULTI_ANSIBLE=force ansible-playbook "$PLAYBOOK" --tags "$SCENARIO" || true
+    # -v shows task output details; MOULTI_ANSIBLE_COLLAPSE=task auto-collapses passing tasks
+    export MOULTI_ANSIBLE=force
+    export MOULTI_ANSIBLE_COLLAPSE=task
+    ansible-playbook "$PLAYBOOK" --tags "$SCENARIO" -v || true
+    unset MOULTI_ANSIBLE MOULTI_ANSIBLE_COLLAPSE
 
     unset TAG_TO_NAME
 done
